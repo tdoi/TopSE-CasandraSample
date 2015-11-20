@@ -1,8 +1,14 @@
 package jp.topse.nosql.cassandra;
 
-import java.util.List;
+import java.io.BufferedInputStream;
+import java.io.BufferedReader;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.HashMap;
+import java.util.Map;
 
-import me.prettyprint.cassandra.serializers.IntegerSerializer;
 import me.prettyprint.cassandra.serializers.StringSerializer;
 import me.prettyprint.cassandra.service.ThriftKsDef;
 import me.prettyprint.cassandra.service.template.ColumnFamilyTemplate;
@@ -21,17 +27,15 @@ import me.prettyprint.hector.api.factory.HFactory;
 public class Excersize {
     public static String CLUSTER_NAME = "Test Cluster";
     public static String DB_SERVER = "localhost";
-    // public static String DB_SERVER = "157.1.206.2";
-    public static String KEYSPACE_NAME = "TopSEKeyspace";
-    public static String COLUMN_FAMILY_NAME = "TopSEColumnFamily";
-    // public static String COLUMN_FAMILY_NAME = "KEYSPACE_NAME";
+    public static String KEYSPACE_NAME = "topsexx";
+    public static String COLUMN_FAMILY_NAME = "access";
 
-    public static String LOG_FILE = "./src/main/resources/access.log";
+    public static String ACCESS_LOG = "./src/main/resources/access.log";
 
     private Cluster cluster;
     private KeyspaceDefinition keyspaceDef;
     private Keyspace keyspace;
-    private ColumnFamilyTemplate<Integer, String> template;
+    private ColumnFamilyTemplate<String, String> template;
 
     public static void main(String[] args) {
         Excersize app = new Excersize();
@@ -39,9 +43,7 @@ public class Excersize {
         app.dropKeyspace();
         app.prepare();
 
-        AccessLogLoader loader = new AccessLogLoader();
-        List<Access> accesses = loader.load(LOG_FILE);
-        app.insertAccesses(accesses);
+        app.insert();
     }
     
     public Excersize() {
@@ -61,17 +63,57 @@ public class Excersize {
         }
         keyspace = HFactory.createKeyspace(KEYSPACE_NAME, cluster);
 
-        template = new ThriftColumnFamilyTemplate<Integer, String>(keyspace, COLUMN_FAMILY_NAME, IntegerSerializer.get(), StringSerializer.get());
+        template = new ThriftColumnFamilyTemplate<String, String>(keyspace, COLUMN_FAMILY_NAME, StringSerializer.get(), StringSerializer.get());
     }
 
-    private void insertAccesses(List<Access> accesses) {
-        for (int i = 0; i < accesses.size(); ++i) {
-            // DO SOMETHING HERE...
+    private void insert() {
+        BufferedReader reader = null;
+        try {
+            reader = new BufferedReader(new InputStreamReader(new BufferedInputStream(new FileInputStream(ACCESS_LOG))));
+            while (true) {
+                String line = reader.readLine();
+                if (line == null) {
+                    break;
+                }
+
+                String[] logItems = line.split(",");
+                String target = logItems[0];
+                Map<String, String> params = new HashMap<String, String>();
+                String referer = logItems.length > 1 ? logItems[1] : null;
+                String[] targetItems = target.split("\\?");
+                if (targetItems.length == 2) {
+                	target = targetItems[0];
+                	String[] paramItems = targetItems[1].split("&");
+                	for (int i = 0; i < paramItems.length; ++i) {
+                		String[] items = paramItems[i].split("=");
+                		params.put(items[0],  items[1]);
+                	}
+                }
+                
+                // Please Implement
+
+            }
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            if (reader != null) {
+                try {
+                    reader.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
         }
     }
     
     private void dropKeyspace() {
-        cluster.dropKeyspace(KEYSPACE_NAME);
+    	try {
+    		cluster.dropKeyspace(KEYSPACE_NAME);
+    	} catch (Exception e) {
+    		e.printStackTrace();
+    	}
     }
 
 }

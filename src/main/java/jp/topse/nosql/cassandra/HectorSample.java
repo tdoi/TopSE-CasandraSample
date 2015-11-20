@@ -14,23 +14,25 @@ import me.prettyprint.cassandra.service.template.ThriftColumnFamilyTemplate;
 import me.prettyprint.hector.api.Cluster;
 import me.prettyprint.hector.api.Keyspace;
 import me.prettyprint.hector.api.beans.HColumn;
+import me.prettyprint.hector.api.beans.OrderedRows;
+import me.prettyprint.hector.api.beans.Row;
 import me.prettyprint.hector.api.ddl.ColumnFamilyDefinition;
 import me.prettyprint.hector.api.ddl.ComparatorType;
 import me.prettyprint.hector.api.ddl.KeyspaceDefinition;
 import me.prettyprint.hector.api.factory.HFactory;
+import me.prettyprint.hector.api.query.QueryResult;
+import me.prettyprint.hector.api.query.RangeSlicesQuery;
 import me.prettyprint.hector.api.query.SliceQuery;
 
 /**
  * Hello world!
  *
  */
-public class Sample {
+public class HectorSample {
     public static String CLUSTER_NAME = "Test Cluster";
-    public static String DB_SERVER = "157.1.206.2";
-    public static String KEYSPACE_NAME = "TopSEKeyspace";
-    public static String COLUMN_FAMILY_NAME = "AccessLog";
-
-    public static String LOG_FILE = "./src/main/resources/access.log";
+    public static String DB_SERVER = "localhost";
+    public static String KEYSPACE_NAME = "topsexx";
+    public static String COLUMN_FAMILY_NAME = "demo";
 
     private Cluster cluster;
     private KeyspaceDefinition keyspaceDef;
@@ -38,21 +40,22 @@ public class Sample {
     private ColumnFamilyTemplate<Integer, String> template;
 
     public static void main(String[] args) {
-        Sample app = new Sample();
+        HectorSample app = new HectorSample();
 
-        app.dropKeyspace();
+  //      app.dropKeyspace();
         app.prepare();
-
+    
         app.insertSample();
         app.findAllSample1();
         app.updateSample();
         app.findAllSample2();
         app.deleteSample();
         app.findAllSample3();
-        app.findAllKeys();
+        app.findAllSample4();
+        app.findAllKeys();        
     }
     
-    public Sample() {
+    public HectorSample() {
         cluster = HFactory.getOrCreateCluster(CLUSTER_NAME, DB_SERVER + ":9160");
     }
 
@@ -71,7 +74,11 @@ public class Sample {
     }
 
     private void dropKeyspace() {
-        cluster.dropKeyspace(KEYSPACE_NAME);
+    	try {
+    		cluster.dropKeyspace(KEYSPACE_NAME);
+    	} catch (Exception e) {
+    		e.printStackTrace();
+    	}
     }
 
     private void insertSample() {
@@ -116,6 +123,9 @@ public class Sample {
         for (int i = 0; i < 10; ++i) {
             int id = i;
             ColumnFamilyResult<Integer, String> res = template.queryColumns(id);
+            for (String name : res.getColumnNames()) {
+            	System.out.println(name + ": " + res.getString(name));
+            }
             String value = "" + res.getKey() + " : " + "c1=" + res.getString("c1") + " " + "c3=" + res.getString("c3") + " " + "v=" + res.getString("v");
             System.out.println(value);
         }
@@ -161,6 +171,36 @@ public class Sample {
                 System.out.println("" + id + " : NOT FOUND");
             }
 
+        }
+    }
+    
+    private void findAllSample4() {
+        System.out.println("----- findAllSample4 -----");
+        int rowCount = 100;
+        int colCount = 5;
+        RangeSlicesQuery<Integer, String, String> rangeSlicesQuery = HFactory.createRangeSlicesQuery(keyspace, IntegerSerializer.get(), StringSerializer.get(), StringSerializer.get())
+                        .setColumnFamily(COLUMN_FAMILY_NAME)
+                        .setRange(null, null, false, colCount)
+                        .setRowCount(rowCount);
+        Integer lastKey = null;
+        while (true) {
+            rangeSlicesQuery.setKeys(lastKey, null);
+            QueryResult<OrderedRows<Integer, String, String>> result = rangeSlicesQuery.execute();
+            OrderedRows<Integer, String, String> rows = result.get();
+            Iterator<Row<Integer, String, String>> rowsIterator = rows.iterator();
+            if (lastKey != null && rowsIterator != null) {
+                rowsIterator.next();
+            }
+            while (rowsIterator.hasNext()) {
+                Row<Integer, String, String> row = rowsIterator.next();
+                System.out.println(row.getKey());
+                for (HColumn<String, String> column : row.getColumnSlice().getColumns()) {
+                	System.out.println(column.getName() + "=" + column.getValue());
+                }
+            }
+            if (rows.getCount() < rowCount) {
+                break;
+            }
         }
     }
 
